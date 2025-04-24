@@ -10,7 +10,8 @@ namespace SistemPemesananTiketWahanaDufan
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new TiketWahanaApp.MainForm());
+            Application.Run(new TiketWahanaApp.FormLogin());
+
         }
     }
 }
