@@ -9,6 +9,9 @@ namespace TiketWahanaApp
     {
         private string connectionString = "Data Source=Andikarya\\ANDIKAARYA;Initial Catalog=TiketwahanDufan2;Integrated Security=True";
 
+        // Tambahkan flag untuk mendeteksi login sebagai admin
+        public bool IsAdminLogin = false;
+
         public FormLogin()
         {
             InitializeComponent();
@@ -30,13 +33,13 @@ namespace TiketWahanaApp
                     if (count > 0)
                     {
                         MessageBox.Show("Login berhasil sebagai Admin.");
-                        this.Hide();
-                        MainForm formAdmin = new MainForm();
-                        formAdmin.Show();
+                        IsAdminLogin = true;
+                        this.DialogResult = DialogResult.OK;  // Kembalikan nilai OK
+                        this.Close(); // Tutup form login, tapi tidak hentikan aplikasi
                     }
                     else
                     {
-                        MessageBox.Show("Email atau Password salah.");
+                        MessageBox.Show("Username atau Password salah.");
                     }
                 }
                 catch (Exception ex)
@@ -51,7 +54,8 @@ namespace TiketWahanaApp
             MessageBox.Show("Login sebagai pengunjung.");
             this.Hide();
             FormPemesanan formGuest = new FormPemesanan();
-            formGuest.Show();
+            formGuest.ShowDialog();
+            this.Show(); // Kembali ke login setelah guest form ditutup
         }
     }
 }

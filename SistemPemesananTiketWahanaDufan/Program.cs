@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Windows.Forms;
 
-namespace SistemPemesananTiketWahanaDufan
+namespace TiketWahanaApp
 {
     internal static class Program
     {
@@ -10,8 +10,21 @@ namespace SistemPemesananTiketWahanaDufan
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new TiketWahanaApp.FormLogin());
 
+            // Tampilkan form login terlebih dahulu
+            FormLogin loginForm = new FormLogin();
+            DialogResult result = loginForm.ShowDialog();
+
+            // Jika login sebagai admin berhasil, buka MainForm sebagai form utama
+            if (result == DialogResult.OK && loginForm.IsAdminLogin)
+            {
+                Application.Run(new MainForm());
+            }
+            else
+            {
+                // Jika login gagal atau ditutup, keluar dari aplikasi
+                Application.Exit();
+            }
         }
     }
 }
