@@ -4,6 +4,9 @@ using System.Data;
 using System.Data.SqlClient;
 using System.Windows.Forms;
 using System.Runtime.Caching;
+using NPOI.SS.UserModel;
+using NPOI.XSSF.UserModel;
+using System.IO;
 
 
 namespace TiketWahanaApp
@@ -433,6 +436,64 @@ namespace TiketWahanaApp
             Form1 laporan = new Form1(); // Form1 adalah form yang punya ReportViewer
             laporan.Show(); // Tampilkan laporan
         }
+        private void btnImport_Click(object sender, EventArgs e)
+        {
+            using (var openFile = new OpenFileDialog())
+            {
+                openFile.Filter = "Excel Files|*.xlsx;*.xlsm";
+                if (openFile.ShowDialog() == DialogResult.OK)
+                    PreviewData(openFile.FileName);
+            }
+        }
+        private void PreviewData(string filePath)
+        {
+            try
+            {
+                using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                {
+                    IWorkbook workbook = new XSSFWorkbook(fs);
+                    ISheet sheet = workbook.GetSheetAt(0);
+                    DataTable dt = new DataTable();
+
+                    // Ambil baris pertama sebagai header
+                    IRow headerRow = sheet.GetRow(0);
+                    foreach (var cell in headerRow.Cells)
+                    {
+                        dt.Columns.Add(cell.ToString());
+                    }
+
+                    // Ambil semua baris setelah header
+                    for (int i = 1; i <= sheet.LastRowNum; i++)
+                    {
+                        IRow dataRow = sheet.GetRow(i);
+                        if (dataRow == null) continue;
+
+                        DataRow newRow = dt.NewRow();
+                        for (int j = 0; j < dt.Columns.Count; j++)
+                        {
+                            ICell cell = dataRow.GetCell(j);
+                            newRow[j] = cell != null ? cell.ToString() : string.Empty;
+                        }
+                        dt.Rows.Add(newRow);
+                    }
+
+                    // Tambahkan debug jumlah baris
+                    MessageBox.Show($"Berhasil membaca {dt.Rows.Count} baris dari Excel.");
+
+                    // Kirim ke PreviewForm
+                    PreviewData previewForm = new PreviewData(dt);
+                    previewForm.ShowDialog();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error membaca file Excel: " + ex.Message);
+            }
+        }
+
+
+
+
 
 
 
@@ -460,7 +521,12 @@ namespace TiketWahanaApp
 
         private void button1_Click(object sender, EventArgs e)
         {
-
+            using (var openFile = new OpenFileDialog())
+            {
+                openFile.Filter = "Excel Files|*.xlsx;*.xlsm";
+                if (openFile.ShowDialog() == DialogResult.OK)
+                    PreviewData(openFile.FileName);
+            }
         }
     }
 }

@@ -60,6 +60,8 @@
             this.label8 = new System.Windows.Forms.Label();
             this.btnAnalyze = new System.Windows.Forms.Button();
             this.btnReport = new System.Windows.Forms.Button();
+            this.btnImport = new System.Windows.Forms.Button();
+
             ((System.ComponentModel.ISupportInitialize)(this.dgvWahana)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.dgvPengunjung)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.dgvPesanan)).BeginInit();
@@ -398,10 +400,21 @@
             this.btnReport.Text = "Laporan";
             this.btnReport.Click += new System.EventHandler(this.btnReport_Click);
             // 
+            // btnImport
+            // 
+            this.btnImport.Location = new System.Drawing.Point(484, 49);
+            this.btnImport.Name = "btnImport";
+            this.btnImport.Size = new System.Drawing.Size(75, 23);
+            this.btnImport.TabIndex = 43;
+            this.btnImport.Text = "Import";
+            this.btnImport.UseVisualStyleBackColor = true;
+            this.btnImport.Click += new System.EventHandler(this.btnImport_Click);
+            // 
             // MainForm
             // 
             this.BackColor = System.Drawing.SystemColors.Window;
             this.ClientSize = new System.Drawing.Size(800, 750);
+            this.Controls.Add(this.btnImport);
             this.Controls.Add(this.btnReport);
             this.Controls.Add(this.btnAnalyze);
             this.Controls.Add(this.label8);
@@ -495,5 +508,6 @@
         private System.Windows.Forms.Label label8;
         private System.Windows.Forms.Button btnAnalyze;
         private System.Windows.Forms.Button btnReport;
+        private System.Windows.Forms.Button btnImport;
     }
 }

@@ -92,9 +92,7 @@ namespace TiketWahanaApp
 
                     MessageBox.Show("Pesanan berhasil disimpan.");
 
-                    // 🔥 INI DIA TAMBAHAN UNTUK MENAMPILKAN FORM PREVIEW
-                    PreviewForm preview = new PreviewForm(txtEmail.Text);
-                    preview.ShowDialog();
+                    
                 }
                 catch (Exception ex)
                 {

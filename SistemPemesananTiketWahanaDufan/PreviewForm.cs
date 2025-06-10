@@ -5,78 +5,62 @@ using System.Windows.Forms;
 
 namespace TiketWahanaApp
 {
-    public partial class PreviewForm : Form
+    public partial class PreviewData : Form
     {
-        private readonly string connString = "Data Source=Andikarya\\ANDIKAARYA;Initial Catalog=TiketwahanDufan2;Integrated Security=True";
-        private readonly string pengunjungEmail;
+        private DataTable importedData;
+        private string connString = @"Data Source=ANDIKARYA\ANDIKAARYA;Initial Catalog=TiketwahanDufan2;User ID=sa;Password=Rodamas17;";
 
-        public PreviewForm(string email)
+        public PreviewData(DataTable dt)
         {
             InitializeComponent();
-            pengunjungEmail = email;
+            importedData = dt;
+            dgvPreview.DataSource = importedData;
         }
 
-        private void PreviewForm_Load(object sender, EventArgs e)
+        private void PreviewData_Load(object sender, EventArgs e)
         {
-            LoadPesanan();
+            dgvPreview.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+
         }
 
-        private void LoadPesanan()
+        private void btnSimpan_Click(object sender, EventArgs e)
         {
-            using (SqlConnection conn = new SqlConnection(connString))
+            var result = MessageBox.Show("Simpan data ke database?", "Konfirmasi", MessageBoxButtons.YesNo);
+            if (result == DialogResult.Yes)
+                SimpanKeDatabase();
+        }
+
+        private void SimpanKeDatabase()
+        {
+            try
             {
-                try
+                using (SqlConnection conn = new SqlConnection(connString))
                 {
                     conn.Open();
-                    string getIdQuery = "SELECT PengunjungID FROM Pengunjung WHERE Email = @Email";
-                    SqlCommand getIdCmd = new SqlCommand(getIdQuery, conn);
-                    getIdCmd.Parameters.AddWithValue("@Email", pengunjungEmail);
-                    object result = getIdCmd.ExecuteScalar();
-
-                    if (result == null)
+                    foreach (DataRow row in importedData.Rows)
                     {
-                        MessageBox.Show("Data pengunjung tidak ditemukan.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        return;
+                        string query = @"
+                            INSERT INTO PesananPreview (PesananID, NamaPengunjung, NamaWahana, TanggalKunjungan)
+                            VALUES (@id, @nama, @wahana, @tanggal)";
+
+                        using (SqlCommand cmd = new SqlCommand(query, conn))
+                        {
+                            cmd.Parameters.AddWithValue("@id", row["PesananID"]);
+                            cmd.Parameters.AddWithValue("@nama", row["NamaPengunjung"]);
+                            cmd.Parameters.AddWithValue("@wahana", row["NamaWahana"]);
+                            cmd.Parameters.AddWithValue("@tanggal", row["TanggalKunjungan"]);
+                            cmd.ExecuteNonQuery();
+                        }
                     }
-
-                    int pengunjungID = Convert.ToInt32(result);
-
-                    // Tampilkan Nama & Email
-                    string infoQuery = "SELECT Nama, Email FROM Pengunjung WHERE PengunjungID = @PengunjungID";
-                    SqlCommand infoCmd = new SqlCommand(infoQuery, conn);
-                    infoCmd.Parameters.AddWithValue("@PengunjungID", pengunjungID);
-                    SqlDataReader reader = infoCmd.ExecuteReader();
-                    if (reader.Read())
-                    {
-                        lblNamaPengunjung.Text = "Nama: " + reader["Nama"].ToString();
-                        lblEmailPengunjung.Text = "Email: " + reader["Email"].ToString();
-                    }
-                    reader.Close();
-
-                    // Load tabel pesanan
-                    string pesananQuery = @"
-                        SELECT w.NamaWahana, w.TipeTiket, p.TanggalKunjungan, 
-                               p.JumlahTiket, p.TotalHarga, p.StatusPesanan
-                        FROM Pesanan p
-                        INNER JOIN Wahana w ON p.WahanaID = w.WahanaID
-                        WHERE p.PengunjungID = @PengunjungID";
-
-                    SqlDataAdapter da = new SqlDataAdapter(pesananQuery, conn);
-                    da.SelectCommand.Parameters.AddWithValue("@PengunjungID", pengunjungID);
-                    DataTable dt = new DataTable();
-                    da.Fill(dt);
-                    dgvPreview.DataSource = dt;
                 }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Gagal memuat data pesanan: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
+
+                MessageBox.Show("Data berhasil disimpan.");
+                this.Close();
             }
-        }
-
-        private void Close_Click(object sender, EventArgs e)
-        {
-            this.Close();
+            catch (Exception ex)
+            {
+                MessageBox.Show("Gagal menyimpan: " + ex.Message);
+            }
         }
     }
 }
