@@ -1,12 +1,13 @@
-﻿using SistemPemesananTiketWahanaDufan;
-using System;
-using System.Data;
-using System.Data.SqlClient;
-using System.Windows.Forms;
-using System.Runtime.Caching;
-using NPOI.SS.UserModel;
+﻿using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
+using SistemPemesananTiketWahanaDufan;
+using System.Data.SqlClient;
+using System.Data;
 using System.IO;
+using System.Runtime.Caching;
+using System.Windows.Forms;
+using System;
+
 
 
 namespace TiketWahanaApp
@@ -15,7 +16,7 @@ namespace TiketWahanaApp
     {
         private string connString = @"Data Source=ANDIKARYA\ANDIKAARYA;Initial Catalog=TiketwahanDufan2;User ID=sa;Password=Rodamas17;";
 
-        
+
         private readonly MemoryCache _cache = MemoryCache.Default;
 
         private readonly CacheItemPolicy _policy = new CacheItemPolicy
@@ -45,6 +46,7 @@ namespace TiketWahanaApp
         {
             DataTable dt;
 
+            // Memanfaatkan cache
             if (_cache.Contains(CacheKeyWahana))
             {
                 dt = _cache.Get(CacheKeyWahana) as DataTable;
@@ -53,59 +55,97 @@ namespace TiketWahanaApp
             {
                 using (SqlConnection conn = new SqlConnection(connString))
                 {
-                    SqlDataAdapter da = new SqlDataAdapter("SELECT * FROM Wahana", conn);
+                    // Memanggil stored procedure GetWahanaList
+                    SqlCommand cmd = new SqlCommand("GetWahanaList", conn);
+                    cmd.CommandType = CommandType.StoredProcedure;
+
+                    SqlDataAdapter da = new SqlDataAdapter(cmd);
                     dt = new DataTable();
                     da.Fill(dt);
                     _cache.Add(CacheKeyWahana, dt, _policy);
                 }
             }
-
             dgvWahana.DataSource = dt;
         }
+
 
         private void dgvWahana_SelectionChanged(object sender, EventArgs e)
         {
             if (dgvWahana.SelectedRows.Count > 0)
             {
                 DataGridViewRow row = dgvWahana.SelectedRows[0];
-                txtNamaWahana.Text = row.Cells["NamaWahana"].Value.ToString();
-                cmbTipeTiket.Text = row.Cells["TipeTiket"].Value.ToString();
-                txtHargaTiket.Text = row.Cells["HargaTiket"].Value.ToString();
-                txtKapasitas.Text = row.Cells["KapasitasHarian"].Value.ToString();
-                cmbAdmin.SelectedValue = row.Cells["AdminID"].Value;
+                txtNamaWahana.Text = row.Cells["NamaWahana"].Value?.ToString() ?? "";
+                cmbTipeTiket.Text = row.Cells["TipeTiket"].Value?.ToString() ?? "";
+                txtHargaTiket.Text = row.Cells["HargaTiket"].Value?.ToString() ?? "";
+                txtKapasitas.Text = row.Cells["KapasitasHarian"].Value?.ToString() ?? "";
+
+                // Pastikan cmbAdmin sudah terisi datanya sebelum mencoba SelectedValue
+                if (cmbAdmin.DataSource != null)
+                {
+                    // Cek apakah AdminID tidak null atau DBNull
+                    if (row.Cells["AdminID"].Value != DBNull.Value && row.Cells["AdminID"].Value != null)
+                    {
+                        cmbAdmin.SelectedValue = row.Cells["AdminID"].Value;
+                    }
+                    else
+                    {
+                        cmbAdmin.SelectedIndex = -1; // Kosongkan pilihan jika AdminID null
+                    }
+                }
             }
         }
 
 
+
         private void btnTambahWahana_Click(object sender, EventArgs e)
         {
+            SqlTransaction transaction = null;
             try
             {
                 using (SqlConnection conn = new SqlConnection(connString))
                 {
                     conn.Open();
-                    SqlCommand cmd = new SqlCommand("INSERT INTO Wahana (NamaWahana, TipeTiket, HargaTiket, KapasitasHarian, AdminID) VALUES (@nama, @tipe, @harga, @kapasitas, @adminID)", conn);
-                    cmd.Parameters.AddWithValue("@nama", txtNamaWahana.Text);
-                    cmd.Parameters.AddWithValue("@tipe", cmbTipeTiket.Text);
-                    cmd.Parameters.AddWithValue("@harga", decimal.Parse(txtHargaTiket.Text));
-                    cmd.Parameters.AddWithValue("@kapasitas", int.Parse(txtKapasitas.Text));
-                    cmd.Parameters.AddWithValue("@adminID", (int)cmbAdmin.SelectedValue);
+                    transaction = conn.BeginTransaction();
+
+                    SqlCommand cmd = new SqlCommand("AddWahana", conn, transaction)
+                    {
+                        CommandType = CommandType.StoredProcedure
+                    };
+
+                    cmd.Parameters.AddWithValue("@NamaWahana", txtNamaWahana.Text.Trim());
+                    cmd.Parameters.AddWithValue("@TipeTiket", cmbTipeTiket.Text.Trim());
+                    cmd.Parameters.AddWithValue("@HargaTiket", decimal.Parse(txtHargaTiket.Text));
+                    cmd.Parameters.AddWithValue("@KapasitasHarian", int.Parse(txtKapasitas.Text));
+
+                    if (cmbAdmin.SelectedValue != null)
+                    {
+                        cmd.Parameters.AddWithValue("@AdminID", (int)cmbAdmin.SelectedValue);
+                    }
+                    else
+                    {
+                        cmd.Parameters.AddWithValue("@AdminID", DBNull.Value);
+                    }
+
                     cmd.ExecuteNonQuery();
-                    
-                    _cache.Remove(CacheKeyWahana);  // Invalidate cache
-                    
+                    transaction.Commit();
+
+                    _cache.Remove(CacheKeyWahana);
+                    MessageBox.Show("Wahana berhasil ditambahkan.", "Sukses", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     LoadWahana();
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Gagal menambah wahana: " + ex.Message);
+                transaction?.Rollback();
+                MessageBox.Show("Gagal menambah wahana: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
 
+
         private void btnUbahWahana_Click(object sender, EventArgs e)
         {
+            SqlTransaction transaction = null;
             try
             {
                 if (dgvWahana.SelectedRows.Count > 0)
@@ -113,25 +153,50 @@ namespace TiketWahanaApp
                     using (SqlConnection conn = new SqlConnection(connString))
                     {
                         conn.Open();
-                        SqlCommand cmd = new SqlCommand("UPDATE Wahana SET NamaWahana=@nama, TipeTiket=@tipe, HargaTiket=@harga, KapasitasHarian=@kapasitas WHERE WahanaID=@id", conn);
-                        cmd.Parameters.AddWithValue("@nama", txtNamaWahana.Text);
-                        cmd.Parameters.AddWithValue("@tipe", cmbTipeTiket.Text);
-                        cmd.Parameters.AddWithValue("@harga", decimal.Parse(txtHargaTiket.Text));
-                        cmd.Parameters.AddWithValue("@kapasitas", int.Parse(txtKapasitas.Text));
-                        cmd.Parameters.AddWithValue("@id", dgvWahana.SelectedRows[0].Cells["WahanaID"].Value);
-                        
+                        transaction = conn.BeginTransaction();
+
+                        SqlCommand cmd = new SqlCommand("UpdateWahana", conn, transaction)
+                        {
+                            CommandType = CommandType.StoredProcedure
+                        };
+
+                        int wahanaID = Convert.ToInt32(dgvWahana.SelectedRows[0].Cells["WahanaID"].Value);
+
+                        cmd.Parameters.AddWithValue("@WahanaID", wahanaID);
+                        cmd.Parameters.AddWithValue("@NamaWahana", txtNamaWahana.Text.Trim());
+                        cmd.Parameters.AddWithValue("@TipeTiket", cmbTipeTiket.Text.Trim());
+                        cmd.Parameters.AddWithValue("@HargaTiket", decimal.Parse(txtHargaTiket.Text));
+                        cmd.Parameters.AddWithValue("@KapasitasHarian", int.Parse(txtKapasitas.Text));
+
+                        if (cmbAdmin.SelectedValue != null)
+                        {
+                            cmd.Parameters.AddWithValue("@AdminID", (int)cmbAdmin.SelectedValue);
+                        }
+                        else
+                        {
+                            cmd.Parameters.AddWithValue("@AdminID", DBNull.Value);
+                        }
+
                         cmd.ExecuteNonQuery();
-                        _cache.Remove(CacheKeyWahana);  // Invalidate cache
-                        
+                        transaction.Commit();
+
+                        _cache.Remove(CacheKeyWahana);
+                        MessageBox.Show("Wahana berhasil diubah.", "Sukses", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         LoadWahana();
                     }
+                }
+                else
+                {
+                    MessageBox.Show("Pilih wahana yang ingin diubah.", "Peringatan", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Gagal mengubah wahana: " + ex.Message);
+                transaction?.Rollback();
+                MessageBox.Show("Gagal mengubah wahana: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
 
         private void LoadTipeTiket()
         {
@@ -150,28 +215,48 @@ namespace TiketWahanaApp
 
         private void btnHapusWahana_Click(object sender, EventArgs e)
         {
+            SqlTransaction transaction = null;
             try
             {
                 if (dgvWahana.SelectedRows.Count > 0)
                 {
-                    using (SqlConnection conn = new SqlConnection(connString))
+                    DialogResult dialogResult = MessageBox.Show("Apakah Anda yakin ingin menghapus wahana ini?", "Konfirmasi Hapus", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                    if (dialogResult == DialogResult.Yes)
                     {
-                        conn.Open();
-                        SqlCommand cmd = new SqlCommand("DELETE FROM Wahana WHERE WahanaID=@id", conn);
-                        cmd.Parameters.AddWithValue("@id", dgvWahana.SelectedRows[0].Cells["WahanaID"].Value);
-                        cmd.ExecuteNonQuery();
-                        
-                        _cache.Remove(CacheKeyWahana);  // Invalidate cache
-                        
-                        LoadWahana();
+                        using (SqlConnection conn = new SqlConnection(connString))
+                        {
+                            conn.Open();
+                            transaction = conn.BeginTransaction();
+
+                            SqlCommand cmd = new SqlCommand("DeleteWahana", conn, transaction)
+                            {
+                                CommandType = CommandType.StoredProcedure
+                            };
+
+                            int wahanaID = Convert.ToInt32(dgvWahana.SelectedRows[0].Cells["WahanaID"].Value);
+                            cmd.Parameters.AddWithValue("@WahanaID", wahanaID);
+
+                            cmd.ExecuteNonQuery();
+                            transaction.Commit();
+
+                            _cache.Remove(CacheKeyWahana);
+                            MessageBox.Show("Wahana berhasil dihapus.", "Sukses", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            LoadWahana();
+                        }
                     }
+                }
+                else
+                {
+                    MessageBox.Show("Pilih wahana yang ingin dihapus.", "Peringatan", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Gagal menghapus wahana: " + ex.Message);
+                transaction?.Rollback();
+                MessageBox.Show("Gagal menghapus wahana: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
 
 
         private void LoadAdmin()
@@ -202,7 +287,10 @@ namespace TiketWahanaApp
         {
             using (SqlConnection conn = new SqlConnection(connString))
             {
-                SqlDataAdapter da = new SqlDataAdapter("SELECT * FROM Pengunjung", conn);
+                SqlCommand cmd = new SqlCommand("GetPengunjungList", conn);
+                cmd.CommandType = CommandType.StoredProcedure;
+                SqlDataAdapter da = new SqlDataAdapter(cmd);
+
                 DataTable dt = new DataTable();
                 da.Fill(dt);
                 dgvPengunjung.DataSource = dt;
@@ -214,14 +302,18 @@ namespace TiketWahanaApp
             if (dgvPengunjung.SelectedRows.Count > 0)
             {
                 DataGridViewRow row = dgvPengunjung.SelectedRows[0];
-                txtNamaPengunjung.Text = row.Cells["Nama"].Value.ToString();
-                txtEmailPengunjung.Text = row.Cells["Email"].Value.ToString();
-                txtPasswordPengunjung.Text = row.Cells["Password"].Value.ToString();
+                txtNamaPengunjung.Text = row.Cells["Nama"].Value?.ToString() ?? "";
+                txtEmailPengunjung.Text = row.Cells["Email"].Value?.ToString() ?? "";
+                // KEAMANAN KRITIS: JANGAN MENAMPILKAN PASSWORD DI UI ADMIN
+                // Selalu kosongkan textbox password untuk mencegah kebocoran atau pembaruan yang tidak sengaja.
+                txtPasswordPengunjung.Text = "";
             }
         }
 
+
         private void btnUbahPengunjung_Click(object sender, EventArgs e)
         {
+            SqlTransaction transaction = null;
             try
             {
                 if (dgvPengunjung.SelectedRows.Count > 0)
@@ -229,57 +321,104 @@ namespace TiketWahanaApp
                     using (SqlConnection conn = new SqlConnection(connString))
                     {
                         conn.Open();
-                        SqlCommand cmd = new SqlCommand("UPDATE Pengunjung SET Nama=@nama, Email=@email WHERE PengunjungID=@id", conn);
-                        cmd.Parameters.AddWithValue("@nama", txtNamaPengunjung.Text);
-                        cmd.Parameters.AddWithValue("@email", txtEmailPengunjung.Text);
-                        cmd.Parameters.AddWithValue("@id", dgvPengunjung.SelectedRows[0].Cells["PengunjungID"].Value);
+                        transaction = conn.BeginTransaction();
+
+                        SqlCommand cmd = new SqlCommand("UpdatePengunjung", conn, transaction)
+                        {
+                            CommandType = CommandType.StoredProcedure
+                        };
+
+                        int pengunjungID = Convert.ToInt32(dgvPengunjung.SelectedRows[0].Cells["PengunjungID"].Value);
+
+                        cmd.Parameters.AddWithValue("@PengunjungID", pengunjungID);
+                        cmd.Parameters.AddWithValue("@Nama", txtNamaPengunjung.Text.Trim());
+                        cmd.Parameters.AddWithValue("@Email", txtEmailPengunjung.Text.Trim());
+
+                        // Menangani password: Jika textbox kosong, SP akan mempertahankan password lama.
+                        // Jika ada input, SP akan memperbarui.
+                        cmd.Parameters.AddWithValue("@Password", txtPasswordPengunjung.Text.Trim());
+
                         cmd.ExecuteNonQuery();
+                        transaction.Commit();
+
+                        MessageBox.Show("Data pengunjung berhasil diubah.", "Sukses", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         LoadPengunjung();
                     }
+                }
+                else
+                {
+                    MessageBox.Show("Pilih pengunjung yang ingin diubah.", "Peringatan", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Gagal mengubah pengunjung: " + ex.Message);
+                transaction?.Rollback();
+                MessageBox.Show("Gagal mengubah pengunjung: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
 
 
         private void btnHapusPengunjung_Click(object sender, EventArgs e)
         {
+            SqlTransaction transaction = null;
             try
             {
                 if (dgvPengunjung.SelectedRows.Count > 0)
                 {
-                    using (SqlConnection conn = new SqlConnection(connString))
+                    DialogResult dialogResult = MessageBox.Show("Apakah Anda yakin ingin menghapus pengunjung ini?", "Konfirmasi Hapus", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                    if (dialogResult == DialogResult.Yes)
                     {
-                        conn.Open();
-                        SqlCommand cmd = new SqlCommand("DELETE FROM Pengunjung WHERE PengunjungID=@id", conn);
-                        cmd.Parameters.AddWithValue("@id", dgvPengunjung.SelectedRows[0].Cells["PengunjungID"].Value);
-                        cmd.ExecuteNonQuery();
-                        LoadPengunjung();
+                        using (SqlConnection conn = new SqlConnection(connString))
+                        {
+                            conn.Open();
+                            transaction = conn.BeginTransaction();
+
+                            SqlCommand cmd = new SqlCommand("DeletePengunjung", conn, transaction)
+                            {
+                                CommandType = CommandType.StoredProcedure
+                            };
+
+                            int pengunjungID = Convert.ToInt32(dgvPengunjung.SelectedRows[0].Cells["PengunjungID"].Value);
+                            cmd.Parameters.AddWithValue("@PengunjungID", pengunjungID);
+
+                            cmd.ExecuteNonQuery();
+                            transaction.Commit();
+
+                            MessageBox.Show("Pengunjung berhasil dihapus.", "Sukses", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            LoadPengunjung();
+                        }
                     }
+                }
+                else
+                {
+                    MessageBox.Show("Pilih pengunjung yang ingin dihapus.", "Peringatan", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Gagal menghapus pengunjung: " + ex.Message);
+                transaction?.Rollback();
+                MessageBox.Show("Gagal menghapus pengunjung: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
-
         #endregion
+
 
         #region — Kelola Tiket / Pesanan —
         private void LoadPesanan()
         {
             using (SqlConnection conn = new SqlConnection(connString))
             {
-                SqlDataAdapter da = new SqlDataAdapter(@"SELECT p.PesananID, q.Nama AS Pengunjung, w.NamaWahana, p.TanggalKunjungan, p.JumlahTiket, p.TotalHarga, p.StatusPesanan FROM Pesanan p JOIN Pengunjung q ON p.PengunjungID=q.PengunjungID JOIN Wahana w ON p.WahanaID=w.WahanaID", conn);
+                SqlCommand cmd = new SqlCommand("GetPesananList", conn);
+                cmd.CommandType = CommandType.StoredProcedure;
+                SqlDataAdapter da = new SqlDataAdapter(cmd);
+
                 DataTable dt = new DataTable();
                 da.Fill(dt);
                 dgvPesanan.DataSource = dt;
             }
         }
+
 
         private void dgvPesanan_SelectionChanged(object sender, EventArgs e)
         {
@@ -287,57 +426,92 @@ namespace TiketWahanaApp
             {
                 DataGridViewRow row = dgvPesanan.SelectedRows[0];
 
-                // Misalnya kontrolnya seperti ini:
-                cmbPengunjung.Text = row.Cells["Pengunjung"].Value.ToString();
-                cmbWahanaPesanan.Text = row.Cells["NamaWahana"].Value.ToString();
-                dtpTanggal.Value = Convert.ToDateTime(row.Cells["TanggalKunjungan"].Value);
-                txtJumlahTiket.Text = row.Cells["JumlahTiket"].Value.ToString();
-                txtTotalHarga.Text = row.Cells["TotalHarga"].Value.ToString();
-                cmbStatusPesanan.Text = row.Cells["StatusPesanan"].Value.ToString();
+                cmbPengunjung.Text = row.Cells["Pengunjung"].Value?.ToString() ?? "";
+                cmbWahanaPesanan.Text = row.Cells["NamaWahana"].Value?.ToString() ?? "";
+
+                if (row.Cells["TanggalKunjungan"].Value != DBNull.Value && row.Cells["TanggalKunjungan"].Value != null)
+                {
+                    dtpTanggal.Value = Convert.ToDateTime(row.Cells["TanggalKunjungan"].Value);
+                }
+                else
+                {
+                    dtpTanggal.Value = DateTime.Now;
+                }
+
+                txtJumlahTiket.Text = row.Cells["JumlahTiket"].Value?.ToString() ?? "";
+                txtTotalHarga.Text = row.Cells["TotalHarga"].Value?.ToString() ?? "";
+                cmbStatusPesanan.Text = row.Cells["StatusPesanan"].Value?.ToString() ?? "";
             }
         }
 
 
+
         private void btnTambahPesanan_Click(object sender, EventArgs e)
         {
+            SqlTransaction transaction = null;
             try
             {
                 using (SqlConnection conn = new SqlConnection(connString))
                 {
                     conn.Open();
-                    SqlCommand cmd = new SqlCommand("INSERT INTO Pesanan (PengunjungID, WahanaID, TanggalKunjungan, JumlahTiket, TotalHarga, MetodePembayaran, StatusPesanan) VALUES (@pengunjung, @wahana, @tanggal, @jumlah, @total, 'Tunai', 'Dipesan')", conn);
+                    transaction = conn.BeginTransaction();
+
+                    SqlCommand cmd = new SqlCommand("AddPesanan", conn, transaction)
+                    {
+                        CommandType = CommandType.StoredProcedure
+                    };
+
                     int jumlah = int.Parse(txtJumlahTiket.Text);
+                    // Panggil stored procedure GetWahanaPriceById
                     decimal harga = GetHargaWahana((int)cmbWahanaPesanan.SelectedValue);
 
-                    cmd.Parameters.AddWithValue("@pengunjung", (int)cmbPengunjung.SelectedValue);
-                    cmd.Parameters.AddWithValue("@wahana", (int)cmbWahanaPesanan.SelectedValue);
-                    cmd.Parameters.AddWithValue("@tanggal", dtpTanggal.Value.Date);
-                    cmd.Parameters.AddWithValue("@jumlah", jumlah);
-                    cmd.Parameters.AddWithValue("@total", harga * jumlah);
+                    cmd.Parameters.AddWithValue("@PengunjungID", (int)cmbPengunjung.SelectedValue);
+                    cmd.Parameters.AddWithValue("@WahanaID", (int)cmbWahanaPesanan.SelectedValue);
+                    cmd.Parameters.AddWithValue("@TanggalKunjungan", dtpTanggal.Value.Date);
+                    cmd.Parameters.AddWithValue("@JumlahTiket", jumlah);
+                    cmd.Parameters.AddWithValue("@TotalHarga", harga * jumlah);
+                    // Parameter berikut sudah memiliki default di SP AddPesanan,
+                    // jadi tidak perlu di-set di sini jika ingin menggunakan default SP.
+                    // Jika ingin set manual, tambahkan:
+                    // cmd.Parameters.AddWithValue("@MetodePembayaran", "Tunai"); 
+                    // cmd.Parameters.AddWithValue("@StatusPesanan", "Dipesan"); 
+
                     cmd.ExecuteNonQuery();
+                    transaction.Commit();
+
+                    MessageBox.Show("Pesanan berhasil ditambahkan.", "Sukses", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     LoadPesanan();
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Gagal menambah pesanan: " + ex.Message);
+                transaction?.Rollback();
+                MessageBox.Show("Gagal menambah pesanan: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
-
 
         private decimal GetHargaWahana(int wahanaID)
         {
             using (SqlConnection conn = new SqlConnection(connString))
             {
                 conn.Open();
-                SqlCommand cmd = new SqlCommand("SELECT HargaTiket FROM Wahana WHERE WahanaID = @id", conn);
-                cmd.Parameters.AddWithValue("@id", wahanaID);
-                return (decimal)cmd.ExecuteScalar();
+                // Memanggil stored procedure GetWahanaPriceById
+                SqlCommand cmd = new SqlCommand("GetWahanaPriceById", conn)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
+                cmd.Parameters.AddWithValue("@WahanaID", wahanaID);
+                object result = cmd.ExecuteScalar();
+                return (result != null && result != DBNull.Value) ? (decimal)result : 0m;
             }
         }
 
+
+
+
         private void btnUpdateStatus_Click(object sender, EventArgs e)
         {
+            SqlTransaction transaction = null;
             try
             {
                 if (dgvPesanan.SelectedRows.Count > 0)
@@ -345,42 +519,82 @@ namespace TiketWahanaApp
                     using (SqlConnection conn = new SqlConnection(connString))
                     {
                         conn.Open();
-                        SqlCommand cmd = new SqlCommand("UPDATE Pesanan SET StatusPesanan=@status WHERE PesananID=@id", conn);
-                        cmd.Parameters.AddWithValue("@status", cmbStatusPesanan.Text);
-                        cmd.Parameters.AddWithValue("@id", dgvPesanan.SelectedRows[0].Cells["PesananID"].Value);
+                        transaction = conn.BeginTransaction();
+
+                        SqlCommand cmd = new SqlCommand("UpdatePesananStatus", conn, transaction)
+                        {
+                            CommandType = CommandType.StoredProcedure
+                        };
+
+                        int pesananID = Convert.ToInt32(dgvPesanan.SelectedRows[0].Cells["PesananID"].Value);
+
+                        cmd.Parameters.AddWithValue("@PesananID", pesananID);
+                        cmd.Parameters.AddWithValue("@StatusPesanan", cmbStatusPesanan.Text.Trim());
+
                         cmd.ExecuteNonQuery();
+                        transaction.Commit();
+
+                        MessageBox.Show("Status pesanan berhasil diupdate.", "Sukses", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         LoadPesanan();
                     }
+                }
+                else
+                {
+                    MessageBox.Show("Pilih pesanan yang ingin diupdate statusnya.", "Peringatan", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Gagal mengupdate status pesanan: " + ex.Message);
+                transaction?.Rollback();
+                MessageBox.Show("Gagal mengupdate status pesanan: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
 
 
         private void btnHapusPesanan_Click(object sender, EventArgs e)
         {
+            SqlTransaction transaction = null;
             try
             {
                 if (dgvPesanan.SelectedRows.Count > 0)
                 {
-                    using (SqlConnection conn = new SqlConnection(connString))
+                    DialogResult dialogResult = MessageBox.Show("Apakah Anda yakin ingin menghapus pesanan ini?", "Konfirmasi Hapus", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                    if (dialogResult == DialogResult.Yes)
                     {
-                        conn.Open();
-                        SqlCommand cmd = new SqlCommand("DELETE FROM Pesanan WHERE PesananID=@id", conn);
-                        cmd.Parameters.AddWithValue("@id", dgvPesanan.SelectedRows[0].Cells["PesananID"].Value);
-                        cmd.ExecuteNonQuery();
-                        LoadPesanan();
+                        using (SqlConnection conn = new SqlConnection(connString))
+                        {
+                            conn.Open();
+                            transaction = conn.BeginTransaction();
+
+                            SqlCommand cmd = new SqlCommand("DeletePesanan", conn, transaction)
+                            {
+                                CommandType = CommandType.StoredProcedure
+                            };
+
+                            int pesananID = Convert.ToInt32(dgvPesanan.SelectedRows[0].Cells["PesananID"].Value);
+                            cmd.Parameters.AddWithValue("@PesananID", pesananID);
+
+                            cmd.ExecuteNonQuery();
+                            transaction.Commit();
+
+                            MessageBox.Show("Pesanan berhasil dihapus.", "Sukses", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            LoadPesanan();
+                        }
                     }
+                }
+                else
+                {
+                    MessageBox.Show("Pilih pesanan yang ingin dihapus.", "Peringatan", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Gagal menghapus pesanan: " + ex.Message);
+                transaction?.Rollback();
+                MessageBox.Show("Gagal menghapus pesanan: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
 
         private void btnAnalyze_Click(object sender, EventArgs e)
         {
