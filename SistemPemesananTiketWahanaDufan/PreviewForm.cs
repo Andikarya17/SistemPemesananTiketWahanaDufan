@@ -8,19 +8,22 @@ namespace TiketWahanaApp
     public partial class PreviewData : Form
     {
         private DataTable importedData;
-        private string connString = @"Data Source=ANDIKARYA\ANDIKAARYA;Initial Catalog=TiketwahanDufan2;User ID=sa;Password=Rodamas17;";
+
+        // ✅ Ambil koneksi dari class koneksi.cs
+        private readonly koneksi konn = new koneksi();
+        private readonly string connString;
 
         public PreviewData(DataTable dt)
         {
             InitializeComponent();
             importedData = dt;
+            connString = konn.connectionString(); // Inisialisasi koneksi
             dgvPreview.DataSource = importedData;
         }
 
         private void PreviewData_Load(object sender, EventArgs e)
         {
             dgvPreview.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-
         }
 
         private void btnSimpan_Click(object sender, EventArgs e)

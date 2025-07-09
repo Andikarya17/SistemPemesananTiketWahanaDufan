@@ -7,17 +7,20 @@ namespace TiketWahanaApp
 {
     public partial class FormPemesanan : Form
     {
-        private string connectionString = "Data Source=Andikarya\\ANDIKAARYA;Initial Catalog=TiketwahanDufan2;Integrated Security=True";
+        // ✅ Tambahkan koneksi dari class koneksi.cs
+        private readonly koneksi konn = new koneksi();
+        private readonly string connString;
 
         public FormPemesanan()
         {
             InitializeComponent();
+            connString = konn.connectionString(); // Inisialisasi koneksi
             LoadWahana(); // WAJIB: supaya dropdown wahana terisi saat form dibuka
         }
 
         private void LoadWahana()
         {
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            using (SqlConnection conn = new SqlConnection(connString))
             {
                 try
                 {
@@ -60,7 +63,56 @@ namespace TiketWahanaApp
 
         private void btnSubmit_Click(object sender, EventArgs e)
         {
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            // ✅ Validasi: Nama tidak diisi
+            if (string.IsNullOrWhiteSpace(txtNama.Text))
+            {
+                MessageBox.Show("Nama tidak boleh kosong.", "Validasi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // ✅ Validasi: Email tidak diisi
+            if (string.IsNullOrWhiteSpace(txtEmail.Text))
+            {
+                MessageBox.Show("Email tidak boleh kosong.", "Validasi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // ✅ Validasi: Wahana tidak dipilih
+            if (cmbWahana.SelectedIndex == -1 || cmbWahana.SelectedValue == null)
+            {
+                MessageBox.Show("Pilih wahana terlebih dahulu.", "Validasi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // ✅ Validasi: Tipe Tiket tidak dipilih
+            if (string.IsNullOrWhiteSpace(cmbTipeTiket.Text))
+            {
+                MessageBox.Show("Pilih tipe tiket terlebih dahulu.", "Validasi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // ✅ Validasi: Tipe Tiket tidak sesuai pilihan (harus Reguler / Fast Track)
+            string tipeTiket = cmbTipeTiket.Text.Trim();
+            if (tipeTiket != "Reguler" && tipeTiket != "Fast Track")
+            {
+                MessageBox.Show("Tipe tiket hanya boleh Reguler atau Fast Track.", "Validasi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // ✅ Validasi: Tanggal tidak dipilih (dianggap kosong jika default 1/1/0001 atau tahun terlalu lama)
+            if (dtpTanggal.Value.Year < 2000)
+            {
+                MessageBox.Show("Tanggal kunjungan tidak valid.", "Validasi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // ✅ Validasi: Jumlah tiket kosong atau bukan angka positif
+            if (!int.TryParse(txtJumlahTiket.Text, out int jumlahTiket) || jumlahTiket <= 0)
+            {
+                MessageBox.Show("Jumlah tiket harus berupa angka lebih dari 0.", "Validasi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            using (SqlConnection conn = new SqlConnection(connString))
             {
                 try
                 {
@@ -77,7 +129,7 @@ namespace TiketWahanaApp
                     }
 
                     decimal hargaPerTiket = GetHargaTiket(conn, (int)cmbWahana.SelectedValue, cmbTipeTiket.Text);
-                    int jumlahTiket = int.Parse(txtJumlahTiket.Text);
+                    
                     decimal totalHarga = hargaPerTiket * jumlahTiket;
 
                     string insertPesanan = "INSERT INTO Pesanan (PengunjungID, WahanaID, TanggalKunjungan, JumlahTiket, TotalHarga, MetodePembayaran, StatusPesanan) " +
@@ -91,8 +143,6 @@ namespace TiketWahanaApp
                     cmd.ExecuteNonQuery();
 
                     MessageBox.Show("Pesanan berhasil disimpan.");
-
-                    
                 }
                 catch (Exception ex)
                 {
@@ -100,7 +150,6 @@ namespace TiketWahanaApp
                 }
             }
         }
-
 
         private int GetPengunjungIDByEmail(SqlConnection conn, string email)
         {

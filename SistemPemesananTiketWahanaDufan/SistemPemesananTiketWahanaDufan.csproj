@@ -132,6 +132,7 @@
     <Compile Include="Form1.Designer.cs">
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
+    <Compile Include="Koneksi.cs" />
     <Compile Include="pengunjung.cs">
       <SubType>Form</SubType>
     </Compile>

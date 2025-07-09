@@ -8,9 +8,14 @@ namespace SistemPemesananTiketWahanaDufan
 {
     public partial class Form1 : Form
     {
+        // ✅ Tambahkan koneksi dari class koneksi.cs
+        private readonly TiketWahanaApp.koneksi konn = new TiketWahanaApp.koneksi();
+        private readonly string connString;
+
         public Form1()
         {
             InitializeComponent();
+            connString = konn.connectionString(); // Ambil koneksi dari koneksi.cs
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -26,9 +31,6 @@ namespace SistemPemesananTiketWahanaDufan
 
         private void SetupReportViewer()
         {
-            // Connection string ke database
-            string connectionString = @"Data Source=ANDIKARYA\ANDIKAARYA;Initial Catalog=TiketwahanDufan2;User ID=sa;Password=Rodamas17;";
-
             // Query untuk mengambil data pesanan beserta nama wahana dan pengunjung
             string query = @"
                 SELECT
@@ -47,25 +49,21 @@ namespace SistemPemesananTiketWahanaDufan
                 INNER JOIN
                     Pengunjung AS g ON p.PengunjungID = g.PengunjungID;";
 
-            // Buat DataTable dan isi dengan data dari query
             DataTable dt = new DataTable();
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            using (SqlConnection conn = new SqlConnection(connString))
             {
                 SqlDataAdapter da = new SqlDataAdapter(query, conn);
                 da.Fill(dt);
             }
 
-            // Buat ReportDataSource dan hubungkan ke ReportViewer
-            ReportDataSource rds = new ReportDataSource("DataSet1", dt); // Pastikan "DataSet1" sesuai dengan nama dataset di RDLC
+            ReportDataSource rds = new ReportDataSource("DataSet1", dt); // Pastikan nama dataset sesuai file RDLC
 
-            // Bersihkan dan tambahkan sumber data ke ReportViewer
             reportViewer1.LocalReport.DataSources.Clear();
             reportViewer1.LocalReport.DataSources.Add(rds);
 
-            // Set path ke file .rdlc
-            reportViewer1.LocalReport.ReportPath = @"E:\Kuliah SMT 4\Pengembangan Aplikasi Basis Data\SistemPemesananTiketWahanaDufan\SistemPemesananTiketWahanaDufan\AdminReport.rdlc";
+            // Ganti path report sesuai lokasi di output deploy (misalnya satu folder)
+            reportViewer1.LocalReport.ReportPath = "AdminReport.rdlc";
 
-            // Refresh laporan
             reportViewer1.RefreshReport();
         }
     }

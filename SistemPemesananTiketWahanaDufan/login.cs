@@ -7,7 +7,9 @@ namespace TiketWahanaApp
 {
     public partial class FormLogin : Form
     {
-        private string connectionString = "Data Source=Andikarya\\ANDIKAARYA;Initial Catalog=TiketwahanDufan2;Integrated Security=True";
+        // ✅ Koneksi dari koneksi.cs
+        private readonly koneksi konn = new koneksi();
+        private readonly string connString;
 
         // Tambahkan flag untuk mendeteksi login sebagai admin
         public bool IsAdminLogin = false;
@@ -15,11 +17,12 @@ namespace TiketWahanaApp
         public FormLogin()
         {
             InitializeComponent();
+            connString = konn.connectionString(); // Inisialisasi koneksi
         }
 
         private void btnAdminLogin_Click(object sender, EventArgs e)
         {
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            using (SqlConnection conn = new SqlConnection(connString))
             {
                 string query = "SELECT COUNT(*) FROM Admin WHERE Nama = @nama AND Password = @password";
                 SqlCommand cmd = new SqlCommand(query, conn);
@@ -34,8 +37,8 @@ namespace TiketWahanaApp
                     {
                         MessageBox.Show("Login berhasil sebagai Admin.");
                         IsAdminLogin = true;
-                        this.DialogResult = DialogResult.OK;  // Kembalikan nilai OK
-                        this.Close(); // Tutup form login, tapi tidak hentikan aplikasi
+                        this.DialogResult = DialogResult.OK;
+                        this.Close();
                     }
                     else
                     {
@@ -55,7 +58,7 @@ namespace TiketWahanaApp
             this.Hide();
             FormPemesanan formGuest = new FormPemesanan();
             formGuest.ShowDialog();
-            this.Show(); // Kembali ke login setelah guest form ditutup
+            this.Show();
         }
     }
 }
